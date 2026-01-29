@@ -123,7 +123,7 @@ class Enemy {
             this.y = Math.random() < 0.5 ? -this.radius : canvas.height + this.radius;
         }
 
-        this.speed = randomRange(1.5, 3.5);
+        this.speed = randomRange(2, 3.5); // Düşman hızı düşürüldü (3-5 -> 2-3.5)
     }
 
     update() {
@@ -172,10 +172,16 @@ function spawnEnemy(timestamp) {
 function updatePlayer() {
     const dist = getDistance(player.x, player.y, player.targetX, player.targetY);
     
-    if (dist > 5) {
-        const angle = Math.atan2(player.targetY - player.y, player.targetX - player.x);
-        player.x += Math.cos(angle) * player.speed;
-        player.y += Math.sin(angle) * player.speed;
+    // Titremeyi önlemek için: Eğer mesafe hızdan küçükse direkt hedefe ışınlan
+    if (dist > 0) {
+        if (dist < player.speed) {
+            player.x = player.targetX;
+            player.y = player.targetY;
+        } else {
+            const angle = Math.atan2(player.targetY - player.y, player.targetX - player.x);
+            player.x += Math.cos(angle) * player.speed;
+            player.y += Math.sin(angle) * player.speed;
+        }
     }
 }
 
@@ -241,17 +247,24 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// Sağ Tık: Hareket
+// Sağ Tık: Hareket (mousedown ile daha seri tepki)
+window.addEventListener('mousedown', (e) => {
+    if (!gameRunning) return;
+
+    // Sağ Tık (Button 2)
+    if (e.button === 2) {
+        // Sağ tık her zaman saldırı modunu iptal eder ve hareket eder
+        isAttackMode = false;
+        document.body.classList.remove('attack-mode');
+
+        player.targetX = e.clientX;
+        player.targetY = e.clientY;
+    }
+});
+
+// Context Menu'yu engelle (Sadece görsel engelleme)
 window.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    if (!gameRunning) return;
-    
-    // Sağ tık her zaman saldırı modunu iptal eder ve hareket eder
-    isAttackMode = false;
-    document.body.classList.remove('attack-mode');
-
-    player.targetX = e.clientX;
-    player.targetY = e.clientY;
 });
 
 // Sol Tık: Saldırı
