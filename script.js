@@ -24,6 +24,12 @@ let score = 0;
 // lastSpawnTime ve spawnInterval artık tek düşman mantığında gereksiz ama
 // respawn gecikmesi için kullanabiliriz.
 let lastSpawnTime = 0; 
+let gameMode = 'normal'; // 'normal' veya 'multi'
+
+function changeGameMode(mode) {
+    gameMode = mode;
+    restartGame();
+}
 
 // Tuş Ayarları
 let attackKey = 'KeyA'; // Varsayılan A tuşu
@@ -31,13 +37,25 @@ let attackKeyDisplay = 'A';
 let isBindingKey = false;
 let isAttackMode = false; // A'ya basıldı mı?
 
+const SPEEDS = {
+    playerNormal: 260,
+    playerMulti: 220,
+    enemyNormalMin: 120,
+    enemyNormalMax: 190,
+    enemyMultiMin: 190,
+    enemyMultiMax: 190,
+    enemyMultiStart: 190
+};
+
+let lastFrameTime = performance.now();
+
 // Oyuncu Ayarları
 const player = {
     x: canvas.width / 2,
     y: canvas.height / 2,
     radius: 15,
     color: '#3498db',
-    speed: 5,
+    speed: SPEEDS.playerNormal,
     targetX: canvas.width / 2,
     targetY: canvas.height / 2,
     range: 200 // Saldırı Menzili
@@ -65,7 +83,18 @@ function restartGame() {
     player.y = canvas.height / 2;
     player.targetX = player.x;
     player.targetY = player.y;
+    player.speed = gameMode === 'multi' ? SPEEDS.playerMulti : SPEEDS.playerNormal;
     // spawnInterval değişkeni kaldırıldı
+    lastSpawnTime = performance.now(); // Reset spawn timer
+    lastFrameTime = performance.now();
+    
+    // Çoklu modda başlangıçta 3 düşman
+    if (gameMode === 'multi') {
+        for(let i = 0; i < 3; i++) {
+            enemies.push(new Enemy(3, SPEEDS.enemyMultiStart)); 
+        }
+    }
+
     isAttackMode = false;
     document.body.classList.remove('attack-mode');
     gameOverScreen.classList.add('hidden');
@@ -107,12 +136,12 @@ function updateKeyBinding(code, key) {
 
 // Düşman Sınıfı
 class Enemy {
-    constructor() {
+    constructor(health, speed) {
         this.radius = 20;
         this.color = '#e74c3c';
         
-        // 20 Vuruşluk Can
-        this.maxHealth = 20;
+        // Sağlık ve Hız parametrelerini al, yoksa varsayılanları kullan
+        this.maxHealth = health || 20;
         this.health = this.maxHealth;
 
         if (Math.random() < 0.5) {
@@ -123,13 +152,14 @@ class Enemy {
             this.y = Math.random() < 0.5 ? -this.radius : canvas.height + this.radius;
         }
 
-        this.speed = randomRange(2, 3.5); // Düşman hızı düşürüldü (3-5 -> 2-3.5)
+        this.speed = speed || randomRange(SPEEDS.enemyNormalMin, SPEEDS.enemyNormalMax);
     }
 
-    update() {
+    update(deltaSeconds) {
         const angle = Math.atan2(player.y - this.y, player.x - this.x);
-        this.x += Math.cos(angle) * this.speed;
-        this.y += Math.sin(angle) * this.speed;
+        const step = this.speed * deltaSeconds;
+        this.x += Math.cos(angle) * step;
+        this.y += Math.sin(angle) * step;
 
         const dist = getDistance(this.x, this.y, player.x, player.y);
         if (dist - this.radius - player.radius < 0) {
@@ -163,24 +193,34 @@ class Enemy {
 }
 
 function spawnEnemy(timestamp) {
-    // Sadece hiç düşman yoksa yeni bir tane oluştur
-    if (enemies.length === 0) {
-        enemies.push(new Enemy());
+    if (gameMode === 'normal') {
+        // Sadece hiç düşman yoksa yeni bir tane oluştur
+        if (enemies.length === 0) {
+            enemies.push(new Enemy());
+        }
+    } else if (gameMode === 'multi') {
+        if (timestamp - lastSpawnTime > 1200) {
+            if (enemies.length < 5) {
+                enemies.push(new Enemy(3, randomRange(SPEEDS.enemyMultiMin, SPEEDS.enemyMultiMax)));
+            }
+            lastSpawnTime = timestamp;
+        }
     }
 }
 
-function updatePlayer() {
+function updatePlayer(deltaSeconds) {
     const dist = getDistance(player.x, player.y, player.targetX, player.targetY);
+    const step = player.speed * deltaSeconds;
     
     // Titremeyi önlemek için: Eğer mesafe hızdan küçükse direkt hedefe ışınlan
     if (dist > 0) {
-        if (dist < player.speed) {
+        if (dist < step) {
             player.x = player.targetX;
             player.y = player.targetY;
         } else {
             const angle = Math.atan2(player.targetY - player.y, player.targetX - player.x);
-            player.x += Math.cos(angle) * player.speed;
-            player.y += Math.sin(angle) * player.speed;
+            player.x += Math.cos(angle) * step;
+            player.y += Math.sin(angle) * step;
         }
     }
 }
@@ -220,10 +260,13 @@ function draw() {
 function gameLoop(timestamp) {
     if (!gameRunning) return;
 
+    const deltaSeconds = Math.min((timestamp - lastFrameTime) / 1000, 0.05);
+    lastFrameTime = timestamp;
+
     spawnEnemy(timestamp);
     
-    updatePlayer();
-    enemies.forEach(enemy => enemy.update());
+    updatePlayer(deltaSeconds);
+    enemies.forEach(enemy => enemy.update(deltaSeconds));
     
     draw();
 
@@ -287,12 +330,8 @@ window.addEventListener('click', (e) => {
 
         // Önce tıklanan noktaya en yakın düşmanı değil,
         // OYUNCUNUN MENZİLİ içindeki en yakın düşmanı bulmamız lazım.
-        // LoL mantığı: Tıkladığın yere en yakın düşman mı? Yoksa sana en yakın mı?
-        // Genelde "Attack Move Click" imlece en yakın düşmana saldırır, eğer imleç boşluğa ise
-        // menzil içindeki en yakın düşmana saldırır.
-        // Kullanıcı "menzil içindeyse direk vursun" dediği için:
-        // İmleç yerine bakmaksızın, menzil içindeki düşmana vuralım.
-        // Zaten şu an tek düşman var ama genel mantığı kuralım.
+        
+        let closestDist = Infinity;
 
         for (let i = 0; i < enemies.length; i++) {
             const enemy = enemies[i];
@@ -300,10 +339,11 @@ window.addEventListener('click', (e) => {
 
             // Eğer düşman menzil içindeyse (Menzil + Düşman Yarıçapı)
             if (distToPlayer <= player.range + enemy.radius) {
-                // Şimdilik ilk bulduğunu veya en yakınını seçebiliriz.
-                // Tek düşman olduğu için direkt bunu hedef alabiliriz.
-                targetEnemyIndex = i;
-                break; 
+                // En yakındakini seç
+                if (distToPlayer < closestDist) {
+                    closestDist = distToPlayer;
+                    targetEnemyIndex = i;
+                }
             }
         }
 
