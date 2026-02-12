@@ -62,6 +62,17 @@ body.attack-mode {
     font-size: 18px;
 }
 
+#settings-modal select {
+    background: #34495e;
+    color: white;
+    border: none;
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 16px;
+    margin-left: 10px;
+    cursor: pointer;
+}
+
 #key-bind-btn {
     background: #34495e;
     margin-left: 10px;
