@@ -23,6 +23,13 @@
                 <label>Saldırı Hareketi Tuşu:</label>
                 <button id="key-bind-btn" onclick="startKeyBind()">A</button>
             </div>
+            <div class="setting-item">
+                <label>Oyun Modu:</label>
+                <select id="game-mode-select" onchange="changeGameMode(this.value)">
+                    <option value="normal">Normal Mod (Tek Daire)</option>
+                    <option value="multi">Çoklu Daire Modu</option>
+                </select>
+            </div>
             <p id="key-bind-msg" class="hidden">Yeni tuşa basınız...</p>
             <button class="close-btn" onclick="toggleSettings()">Kapat</button>
         </div>
